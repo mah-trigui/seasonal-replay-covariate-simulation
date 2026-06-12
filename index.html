@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seasonal Replay Covariate Simulation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="container">
+      <h1>When Future Covariates Are Unavailable, Replay Last Year’s Season and Rescale It</h1>
+      <p class="subtitle">
+        A deployment-time approximation strategy for missing traffic and weather inputs
+      </p>
+      <div class="hero-buttons">
+        <a href="https://github.com/mah-trigui/seasonal-replay-covariate-simulation" class="btn primary">View Repository</a>
+        <a href="#idea" class="btn secondary">Explore Method</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container">
+        <h2>Overview</h2>
+        <p>
+          This project highlights a specific deployment problem inside the Nairobi crash prediction pipeline: some of the strongest covariates, especially Uber Movement traffic speeds and weather, were not available for the future prediction period.
+        </p>
+        <p>
+          The test window covered July to December 2019, but real future values for those variables did not exist at scoring time. Instead of dropping them or freezing the last observed values, the pipeline used a more structured approximation.
+        </p>
+        <p>
+          The core tactic was simple: <strong>reuse the same seasonal window from the prior year, then rescale it using the recent year-over-year level ratio.</strong>
+        </p>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>Architecture</h2>
+        <img src="images/architecture.jpg" alt="Seasonal replay and year-over-year rescaling for future covariates" class="architecture-image" />
+      </div>
+    </section>
+
+    <section class="section" id="idea">
+      <div class="container">
+        <h2>The Core Idea</h2>
+        <p>
+          The goal was not to forecast exact future traffic speed values.
+        </p>
+        <p>
+          The goal was to preserve three things:
+        </p>
+        <ul class="clean-list">
+          <li>the shape of the relevant seasonal window</li>
+          <li>the relative structure across segments and time bins</li>
+          <li>the level shift implied by recent year-over-year change</li>
+        </ul>
+        <div class="metric-box">
+          <p><strong>Seasonal replay × recent level adjustment is often more useful than stale carry-forward.</strong></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>The approximation logic</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Bad option: drop the feature</h3>
+            <p>
+              Safe, but expensive. You lose a variable that clearly carries operational signal.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Weak option: freeze the last value</h3>
+            <p>
+              Keeps the feature but destroys seasonality and relative temporal movement.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Chosen option: replay + rescale</h3>
+            <p>
+              Reuse the prior-year seasonal window and shift it using the recent year-over-year ratio.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <h2>Selected Code Snippet</h2>
+        <pre>
+uber_2018_h2 <- uber_by[year == 2018 & month %in% 7:12]
+uber_2019_h1 <- uber_by[year == 2019 & month %in% 1:6]
+uber_2018_h1 <- uber_by[year == 2018 & month %in% 1:6]
+
+trend_ratio <- mean(uber_2019_h1$speed, na.rm = TRUE) /
+    mean(uber_2018_h1$speed, na.rm = TRUE)
+
+uber_future <- copy(uber_2018_h2)
+uber_future[, year := 2019L]
+uber_future[, speed := speed * trend_ratio]
+        </pre>
+        <p>
+          In practice, this means:
+        </p>
+        <ul class="clean-list">
+          <li>take July–December 2018 as the structural template</li>
+          <li>measure how Jan–June 2019 differs from Jan–June 2018</li>
+          <li>apply that ratio to the replayed second-half seasonal pattern</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>Why this was useful</h2>
+        <ul class="clean-list">
+          <li>kept informative covariates in the deployed model</li>
+          <li>preserved seasonality better than last-observation carry-forward</li>
+          <li>introduced a simple level correction without pretending exact future knowledge</li>
+          <li>fit naturally with traffic and weather variables that have recurring annual structure</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <h2>Where this pattern generalizes</h2>
+        <ul class="clean-list">
+          <li>traffic and mobility modeling</li>
+          <li>weather-dependent operational prediction</li>
+          <li>economic indicators with delayed publication</li>
+          <li>demand and supply systems with future covariate gaps</li>
+        </ul>
+        <p>
+          The reusable idea is not “future features may be missing.” The reusable idea is a specific approximation strategy: reuse prior seasonal geometry, then shift the level using recent trend.
+        </p>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>Key Takeaway</h2>
+        <div class="metric-box">
+          <p><strong>When exact future covariates are unavailable, a seasonal replay with year-over-year rescaling can preserve enough structure to keep the feature useful.</strong></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <h2>Public Repository Scope</h2>
+        <p>
+          This public version focuses on the future-covariate approximation logic, selected implementation details, and project presentation. Competition data files are not included.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Built as a public project showcase for deployment-aware covariate approximation in applied machine learning.</p>
+    </div>
+  </footer>
+</body>
+</html>
